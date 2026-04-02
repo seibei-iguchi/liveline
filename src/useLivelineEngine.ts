@@ -426,13 +426,13 @@ function updateBadgeDOM(
 
   const text = cfg.formatValue(smoothValue)
   badge.text.textContent = text
-  badge.text.style.font = cfg.palette.labelFont
+  badge.text.style.font = cfg.palette.badgeFont
   badge.text.style.lineHeight = `${BADGE_LINE_H}px`
   const tailLen = cfg.badgeTail ? BADGE_TAIL_LEN : 0
   badge.text.style.padding = `${BADGE_PAD_Y}px ${BADGE_PAD_X}px ${BADGE_PAD_Y}px ${tailLen + BADGE_PAD_X}px`
 
   // Measure target text width using canvas (template with widest digits)
-  ctx.font = cfg.palette.labelFont
+  ctx.font = cfg.palette.badgeFont
   const template = text.replace(/[0-9]/g, '8')
   const targetTextW = ctx.measureText(template).width
 
@@ -1550,7 +1550,7 @@ export function useLivelineEngine(
     // Scale with chartReveal so layout doesn't shift during loading collapse.
     let labelReserve = 0
     if (effectiveMultiSeries.some(s => s.label)) {
-      ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+      ctx.font = cfg.palette.seriesLabelFont
       let maxLabelW = 0
       for (const s of effectiveMultiSeries) {
         if (s.label) {

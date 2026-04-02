@@ -59,12 +59,11 @@ export function drawCrosshair(
 
   ctx.save()
   ctx.globalAlpha = scrubOpacity
-  ctx.font = '400 13px "SF Mono", Menlo, monospace'
+  ctx.font = palette.scrubFont
 
   const valueW = ctx.measureText(valueText).width
-  const sepW = ctx.measureText(separator).width
   const timeW = ctx.measureText(timeText).width
-  const totalW = valueW + sepW + timeW
+  const totalW = valueW + ctx.measureText(separator).width + timeW
 
   // Center on crosshair, clamp to chart bounds
   // Right edge of tooltip text aligns with the right edge of the live dot circle
@@ -150,7 +149,7 @@ export function drawMultiCrosshair(
   // Format: "TIME  ·  ● Label Value  ·  ● Label Value"
   ctx.save()
   ctx.globalAlpha = scrubOpacity
-  ctx.font = '400 13px "SF Mono", Menlo, monospace'
+  ctx.font = palette.scrubFont
   ctx.textAlign = 'left'
 
   const timeText = formatTime(hoverTime)

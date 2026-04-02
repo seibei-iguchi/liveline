@@ -46,6 +46,7 @@ export function Liveline({
   lerpSpeed = 0.08,
   padding: paddingOverride,
   markers,
+  typography,
   onHover,
   cursor = 'crosshair',
   pulse = true,
@@ -77,10 +78,10 @@ export function Liveline({
   if (seriesProp && seriesProp.length > 0) lastSeriesPropRef.current = seriesProp
 
   const palette = useMemo(() => {
-    const p = resolveTheme(color, theme)
+    const p = resolveTheme(color, theme, typography)
     if (lineWidth != null) p.lineWidth = lineWidth
     return p
-  }, [color, theme, lineWidth])
+  }, [color, theme, typography, lineWidth])
   const isDark = theme === 'dark'
   const isMultiSeries = seriesProp != null && seriesProp.length > 0
   const showSeriesToggle = (lastSeriesPropRef.current?.length ?? 0) > 1
@@ -88,8 +89,8 @@ export function Liveline({
   // Per-series palettes (memoized on series ids + colors + theme)
   const seriesPalettes = useMemo(() => {
     if (!seriesProp || seriesProp.length === 0) return null
-    return resolveSeriesPalettes(seriesProp, theme)
-  }, [seriesProp, theme])
+    return resolveSeriesPalettes(seriesProp, theme, typography)
+  }, [seriesProp, theme, typography])
 
   // Normalized multi-series config for the engine
   const multiSeries = useMemo(() => {
@@ -98,10 +99,10 @@ export function Liveline({
       id: s.id,
       data: s.data,
       value: s.value,
-      palette: seriesPalettes.get(s.id) ?? resolveTheme(s.color || SERIES_COLORS[i % SERIES_COLORS.length], theme),
+      palette: seriesPalettes.get(s.id) ?? resolveTheme(s.color || SERIES_COLORS[i % SERIES_COLORS.length], theme, typography),
       label: s.label,
     }))
-  }, [seriesProp, seriesPalettes, theme])
+  }, [seriesProp, seriesPalettes, theme, typography])
 
   // Resolve momentum prop: boolean enables auto-detect, string overrides
   const showMomentum = momentum !== false

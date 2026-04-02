@@ -164,7 +164,7 @@ export function drawOrderbook(
   // Draw
   const baseAlpha = ctx.globalAlpha
   ctx.save()
-  ctx.font = '600 13px "SF Mono", Menlo, monospace'
+  ctx.font = palette.orderbookFont
   ctx.textAlign = 'left'
   ctx.textBaseline = 'middle'
   ctx.globalAlpha = baseAlpha

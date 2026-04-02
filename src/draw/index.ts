@@ -413,7 +413,7 @@ export function drawMultiFrame(
 
       // Label at endpoint (right of dot — layout reserves space via labelReserve)
       if (entry.label) {
-        ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+        ctx.font = entry.palette.seriesLabelFont
         ctx.textAlign = 'left'
         ctx.fillStyle = entry.palette.line
         ctx.fillText(entry.label, lastPt[0] + 6, lastPt[1] + 3.5)

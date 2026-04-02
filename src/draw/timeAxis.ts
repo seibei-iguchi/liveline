@@ -33,7 +33,7 @@ export function drawTimeAxis(
     return fromEdge / fadeZone
   }
 
-  ctx.font = palette.labelFont
+  ctx.font = palette.gridLabelFont
 
   // Interval fully derived from target window — no dependency on the
   // interpolating display. Prevents a one-frame flicker when the transition

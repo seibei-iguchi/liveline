@@ -114,7 +114,7 @@ export function drawGrid(
   const baseAlpha = ctx.globalAlpha
   ctx.setLineDash([1, 3])
   ctx.lineWidth = 1
-  ctx.font = palette.labelFont
+  ctx.font = palette.gridLabelFont
   ctx.textAlign = 'left'
 
   for (const [key, alpha] of state.labels) {
