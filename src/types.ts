@@ -53,12 +53,29 @@ export interface LivelineSeries {
   color: string
   label?: string
 }
-
 export interface LivelineMarker {
   time: number
   label: string
   type?: 'positive' | 'negative'
   seriesId?: string
+}
+
+export interface LivelineFontSpec {
+  size: number | string
+  family: string | string[]
+  weight?: number | string
+  style?: string
+  variant?: string
+  lineHeight?: number | string
+}
+
+export type LivelineFontValue = string | LivelineFontSpec
+
+export interface LivelineTypography {
+  labelFont?: LivelineFontValue
+  gridLabelFont?: LivelineFontValue
+  scrubFont?: LivelineFontValue
+  seriesLabelFont?: LivelineFontValue
 }
 
 export interface LivelineProps {
@@ -112,6 +129,7 @@ export interface LivelineProps {
   lerpSpeed?: number
   padding?: Padding
   markers?: LivelineMarker[]
+  typography?: LivelineTypography
   onHover?: (point: HoverPoint | null) => void
   cursor?: string          // CSS cursor on hover (default: 'crosshair')
   pulse?: boolean          // Pulsing ring on live dot (default: true)
@@ -189,6 +207,12 @@ export interface LivelinePalette {
 
   // Fonts
   labelFont: string
+  gridLabelFont: string
+  scrubFont: string
+  seriesLabelFont: string
+  refLabelFont: string
+  emptyFont: string
+  orderbookFont: string
   valueFont: string
   badgeFont: string
 }

@@ -31,7 +31,7 @@ export function drawEmpty(
   const amplitude = chartH * LOADING_AMPLITUDE_RATIO
 
   ctx.save()
-  ctx.font = '400 12px system-ui, -apple-system, sans-serif'
+  ctx.font = palette.emptyFont
 
   // Measure text to know gap size
   const textW = ctx.measureText(text).width

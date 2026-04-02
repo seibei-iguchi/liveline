@@ -254,7 +254,7 @@ export function drawCandleCrosshair(
 
   ctx.save()
   ctx.globalAlpha = opacity
-  ctx.font = '400 13px "SF Mono", Menlo, monospace'
+  ctx.font = palette.scrubFont
   ctx.textAlign = 'left'
 
   // Full OHLC at ≥400px, condensed (close + time) at smaller sizes
@@ -371,7 +371,7 @@ export function drawLineModeCrosshair(
 
   ctx.save()
   ctx.globalAlpha = opacity
-  ctx.font = '400 13px "SF Mono", Menlo, monospace'
+  ctx.font = palette.scrubFont
   ctx.textAlign = 'left'
 
   const parts: { text: string; color: string }[] = [

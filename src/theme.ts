@@ -1,4 +1,21 @@
-import type { ThemeMode, LivelinePalette, LivelineSeries } from './types'
+import type {
+  ThemeMode,
+  LivelinePalette,
+  LivelineSeries,
+  LivelineTypography,
+  LivelineFontSpec,
+  LivelineFontValue,
+} from './types'
+
+const DEFAULT_LABEL_FONT = '400 12px system-ui, -apple-system, sans-serif'
+const DEFAULT_GRID_LABEL_FONT = '11px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace'
+const DEFAULT_SCRUB_FONT = '400 13px "SF Mono", Menlo, monospace'
+const DEFAULT_SERIES_LABEL_FONT = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif'
+const DEFAULT_REF_LABEL_FONT = '500 11px system-ui, sans-serif'
+const DEFAULT_EMPTY_FONT = '400 12px system-ui, -apple-system, sans-serif'
+const DEFAULT_ORDERBOOK_FONT = '600 13px "SF Mono", Menlo, monospace'
+const DEFAULT_VALUE_FONT = '600 11px "SF Mono", Menlo, monospace'
+const DEFAULT_BADGE_FONT = '500 11px "SF Mono", Menlo, monospace'
 
 /** Parse any CSS color string to [r, g, b]. Handles hex (#rgb, #rrggbb), rgb(), rgba(). */
 export function parseColorRgb(color: string): [number, number, number] {
@@ -17,13 +34,55 @@ function rgba(r: number, g: number, b: number, a: number): string {
   return `rgba(${r}, ${g}, ${b}, ${a})`
 }
 
+function formatFontSize(size: number | string): string {
+  return typeof size === 'number' ? `${size}px` : size
+}
+
+function formatLineHeight(lineHeight: number | string): string {
+  return typeof lineHeight === 'number' ? String(lineHeight) : lineHeight
+}
+
+function formatFontFamily(family: string | string[]): string {
+  return Array.isArray(family) ? family.join(', ') : family
+}
+
+function serializeFontSpec(font: LivelineFontSpec): string {
+  const parts = [
+    font.style,
+    font.variant,
+    font.weight != null ? String(font.weight) : undefined,
+  ].filter(Boolean)
+  const size = formatFontSize(font.size)
+  const lineHeight = font.lineHeight != null ? `/${formatLineHeight(font.lineHeight)}` : ''
+  parts.push(`${size}${lineHeight}`)
+  parts.push(formatFontFamily(font.family))
+  return parts.join(' ')
+}
+
+function toCanvasFont(font: LivelineFontValue | undefined, fallback: string): string {
+  if (font == null) return fallback
+  return typeof font === 'string' ? font : serializeFontSpec(font)
+}
+
 /**
  * Derive a full palette from a single accent color + theme mode.
  * Momentum colors are always semantic green/red regardless of accent.
  */
-export function resolveTheme(color: string, mode: ThemeMode): LivelinePalette {
+export function resolveTheme(
+  color: string,
+  mode: ThemeMode,
+  typography: LivelineTypography = {},
+): LivelinePalette {
   const [r, g, b] = parseColorRgb(color)
   const isDark = mode === 'dark'
+  const labelFont = toCanvasFont(typography.labelFont, DEFAULT_LABEL_FONT)
+  const gridLabelFont = toCanvasFont(typography.gridLabelFont ?? typography.labelFont, DEFAULT_GRID_LABEL_FONT)
+  const scrubFont = toCanvasFont(typography.scrubFont ?? typography.labelFont, DEFAULT_SCRUB_FONT)
+  const seriesLabelFont = toCanvasFont(typography.seriesLabelFont ?? typography.labelFont, DEFAULT_SERIES_LABEL_FONT)
+  const refLabelFont = toCanvasFont(typography.labelFont, DEFAULT_REF_LABEL_FONT)
+  const emptyFont = toCanvasFont(typography.labelFont, DEFAULT_EMPTY_FONT)
+  const orderbookFont = toCanvasFont(typography.scrubFont ?? typography.labelFont, DEFAULT_ORDERBOOK_FONT)
+  const badgeFont = toCanvasFont(typography.labelFont ?? typography.gridLabelFont, DEFAULT_BADGE_FONT)
 
   return {
     // Line
@@ -72,9 +131,15 @@ export function resolveTheme(color: string, mode: ThemeMode): LivelinePalette {
     bgRgb: isDark ? [10, 10, 10] as [number, number, number] : [255, 255, 255] as [number, number, number],
 
     // Fonts
-    labelFont: '11px "SF Mono", Menlo, Monaco, "Cascadia Code", monospace',
-    valueFont: '600 11px "SF Mono", Menlo, monospace',
-    badgeFont: '500 11px "SF Mono", Menlo, monospace',
+    labelFont,
+    gridLabelFont,
+    scrubFont,
+    seriesLabelFont,
+    refLabelFont,
+    emptyFont,
+    orderbookFont,
+    valueFont: DEFAULT_VALUE_FONT,
+    badgeFont,
   }
 }
 
@@ -94,12 +159,13 @@ export const SERIES_COLORS = [
 export function resolveSeriesPalettes(
   series: LivelineSeries[],
   mode: ThemeMode,
+  typography: LivelineTypography = {},
 ): Map<string, LivelinePalette> {
   const map = new Map<string, LivelinePalette>()
   for (let i = 0; i < series.length; i++) {
     const s = series[i]
     const color = s.color || SERIES_COLORS[i % SERIES_COLORS.length]
-    map.set(s.id, resolveTheme(color, mode))
+    map.set(s.id, resolveTheme(color, mode, typography))
   }
   return map
 }

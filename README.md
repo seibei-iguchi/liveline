@@ -55,6 +55,7 @@ The component fills its parent container. Set a height on the parent. Pass `data
 | `fill` | `boolean` | `true` | Gradient under the curve |
 | `pulse` | `boolean` | `true` | Pulsing ring on live dot |
 | `lineWidth` | `number` | `2` | Stroke width of the main line in pixels |
+| `typography` | `LivelineTypography` | — | Override canvas text fonts with raw strings or structured specs for `labelFont`, `gridLabelFont`, `scrubFont`, and `seriesLabelFont` |
 
 **Features**
 
@@ -153,6 +154,19 @@ When `loading` flips to `false` with data present, the loading line morphs into 
 | `cursor` | `string` | `'crosshair'` | CSS cursor on canvas hover |
 | `className` | `string` | — | Container class |
 | `style` | `CSSProperties` | — | Container styles |
+
+`typography.labelFont` acts as the general fallback for label-style text such as the badge, empty state, and reference line. More specific keys override only their own paths:
+
+- `gridLabelFont`: grid + time-axis labels
+- `scrubFont`: crosshair and candle scrub tooltips
+- `seriesLabelFont`: multi-series endpoint labels
+
+Each typography entry accepts either:
+
+- a raw canvas font string like `'600 10px "SF Mono", Menlo, monospace'`
+- a structured object like `{ size: 10, weight: 600, family: ['SF Mono', 'Menlo', 'monospace'] }`
+
+Structured specs compile to valid canvas font strings internally, so you only need to provide `size` and `family`. Optional fields are `weight`, `style`, `variant`, and `lineHeight`.
 
 ## Examples
 

@@ -14,7 +14,7 @@ export function drawReferenceLine(
   const label = ref.label ?? ''
 
   if (label) {
-    ctx.font = '500 11px system-ui, sans-serif'
+    ctx.font = palette.refLabelFont
     const textW = ctx.measureText(label).width
     const centerX = pad.left + chartW / 2
     const gapPad = 8
