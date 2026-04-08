@@ -1,4 +1,5 @@
 import type { ChartLayout, LivelinePalette, CandlePoint } from '../types'
+import type { HoverMarkerLabel } from './index'
 
 export type { CandlePoint } from '../types'
 
@@ -225,6 +226,7 @@ export function drawCandleCrosshair(
   formatValue: (v: number) => string,
   formatTime: (t: number) => string,
   opacity: number,
+  hoverMarker?: HoverMarkerLabel,
 ) {
   if (opacity < 0.01) return
 
@@ -257,7 +259,13 @@ export function drawCandleCrosshair(
 
   // Full OHLC at ≥400px, condensed (close + time) at smaller sizes
   let parts: { text: string; color: string }[]
-  if (layout.w >= 400) {
+  if (hoverMarker) {
+    parts = [
+      { text: hoverMarker.label, color: hoverMarker.color },
+      { text: '  \u00b7  ', color: palette.gridLabel },
+      { text: time, color: palette.gridLabel },
+    ]
+  } else if (layout.w >= 400) {
     const o = formatValue(candle.open)
     const hi = formatValue(candle.high)
     const lo = formatValue(candle.low)
@@ -333,6 +341,7 @@ export function drawLineModeCrosshair(
   formatValue: (v: number) => string,
   formatTime: (t: number) => string,
   opacity: number,
+  hoverMarker?: HoverMarkerLabel,
 ) {
   if (opacity < 0.01) return
 
@@ -357,7 +366,7 @@ export function drawLineModeCrosshair(
 
   if (opacity < 0.1 || layout.w < 200) return
 
-  const val = formatValue(value)
+  const val = hoverMarker?.label ?? formatValue(value)
   const time = formatTime(hoverTime)
 
   ctx.save()
@@ -366,7 +375,7 @@ export function drawLineModeCrosshair(
   ctx.textAlign = 'left'
 
   const parts: { text: string; color: string }[] = [
-    { text: val, color: palette.line },
+    { text: val, color: hoverMarker?.color ?? palette.line },
     { text: '  \u00b7  ', color: palette.gridLabel },
     { text: time, color: palette.gridLabel },
   ]

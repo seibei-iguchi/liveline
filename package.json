@@ -1,6 +1,6 @@
 {
-  "name": "liveline",
-  "version": "0.0.7",
+  "name": "@seibei-iguchi/liveline",
+  "version": "0.0.8",
   "type": "module",
   "description": "Real-time animated charts for React — line, candlestick, and multi-series modes",
   "keywords": [
@@ -16,13 +16,13 @@
     "multi-line"
   ],
   "license": "MIT",
-  "author": "Benji Taylor",
+  "author": "seibei-iguchi",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/benjitaylor/liveline.git"
+    "url": "git+https://github.com/seibei-iguchi/liveline.git"
   },
-  "homepage": "https://github.com/benjitaylor/liveline#readme",
-  "bugs": "https://github.com/benjitaylor/liveline/issues",
+  "homepage": "https://github.com/seibei-iguchi/liveline#readme",
+  "bugs": "https://github.com/seibei-iguchi/liveline/issues",
   "sideEffects": false,
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -45,6 +45,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18"
   },
