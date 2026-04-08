@@ -54,6 +54,13 @@ export interface LivelineSeries {
   label?: string
 }
 
+export interface LivelineMarker {
+  time: number
+  label: string
+  type?: 'positive' | 'negative'
+  seriesId?: string
+}
+
 export interface LivelineProps {
   data: LivelinePoint[]
   value: number
@@ -104,6 +111,7 @@ export interface LivelineProps {
   formatTime?: (t: number) => string
   lerpSpeed?: number
   padding?: Padding
+  markers?: LivelineMarker[]
   onHover?: (point: HoverPoint | null) => void
   cursor?: string          // CSS cursor on hover (default: 'crosshair')
   pulse?: boolean          // Pulsing ring on live dot (default: true)

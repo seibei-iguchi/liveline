@@ -23,8 +23,49 @@ export interface ShakeState {
   amplitude: number  // current shake magnitude in px, decays each frame
 }
 
+export interface ResolvedMarker {
+  x: number
+  y: number
+  label: string
+  color: string
+}
+
+export interface HoverMarkerLabel {
+  label: string
+  color: string
+}
+
 export function createShakeState(): ShakeState {
   return { amplitude: 0 }
+}
+
+function drawMarkers(
+  ctx: CanvasRenderingContext2D,
+  layout: ChartLayout,
+  palette: LivelinePalette,
+  markers: ResolvedMarker[] | undefined,
+  alpha: number,
+): void {
+  if (!markers || markers.length === 0 || alpha <= 0.01) return
+
+  const outline = `rgb(${palette.bgRgb[0]}, ${palette.bgRgb[1]}, ${palette.bgRgb[2]})`
+  ctx.save()
+  ctx.globalAlpha *= alpha
+
+  for (const marker of markers) {
+    if (marker.x < layout.pad.left - 6 || marker.x > layout.w - layout.pad.right + 6) continue
+    if (marker.y < layout.pad.top - 6 || marker.y > layout.h - layout.pad.bottom + 6) continue
+
+    ctx.beginPath()
+    ctx.arc(marker.x, marker.y, 4, 0, Math.PI * 2)
+    ctx.fillStyle = marker.color
+    ctx.fill()
+    ctx.strokeStyle = outline
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
+
+  ctx.restore()
 }
 
 export interface DrawOptions {
@@ -38,6 +79,8 @@ export interface DrawOptions {
   showPulse: boolean
   showFill: boolean
   referenceLine?: ReferenceLine
+  markers?: ResolvedMarker[]
+  hoverMarker?: HoverMarkerLabel | null
   hoverX: number | null
   hoverValue: number | null
   hoverTime: number | null
@@ -140,6 +183,8 @@ export function drawFrame(
     }
   }
 
+  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+
   if (pts && pts.length > 0) {
     const lastPt = pts[pts.length - 1]
 
@@ -220,6 +265,7 @@ export function drawFrame(
         opts.tooltipY,
         lastPt[0], // liveDotX — tooltip right edge stops here
         opts.tooltipOutline,
+        opts.hoverMarker ?? undefined,
       )
     }
   }
@@ -233,6 +279,7 @@ export function drawFrame(
 // ─── Multi-series draw orchestration ──────────────────────────────────────
 
 export interface MultiSeriesEntry {
+  id: string
   visible: LivelinePoint[]
   smoothValue: number
   palette: LivelinePalette
@@ -246,6 +293,8 @@ export interface MultiSeriesDrawOptions {
   showGrid: boolean
   showPulse: boolean
   referenceLine?: ReferenceLine
+  markers?: ResolvedMarker[]
+  hoverMarker?: HoverMarkerLabel | null
   hoverX: number | null
   hoverTime: number | null
   hoverEntries: MultiSeriesHoverEntry[]
@@ -339,6 +388,8 @@ export function drawMultiFrame(
     }
   }
 
+  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+
   // 5. Endpoint dots + labels for each series
   // Dots stay at reveal-based alpha only (no scrub dimming) — matching
   // single-series where drawDot keeps inner dot at full baseAlpha
@@ -407,6 +458,7 @@ export function drawMultiFrame(
         opts.tooltipY,
         opts.tooltipOutline,
         maxLiveDotX,
+        opts.hoverMarker ?? undefined,
       )
     }
   }
@@ -432,6 +484,8 @@ export interface CandleDrawOptions {
   now: number
   pauseProgress: number
   showGrid: boolean
+  markers?: ResolvedMarker[]
+  hoverMarker?: HoverMarkerLabel | null
   scrubAmount: number
   hoverX: number | null
   hoverValue: number | null
@@ -601,6 +655,8 @@ export function drawCandleFrame(
     ctx.restore()
   }
 
+  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+
   // 5. Live dot — position from drawLine's returned pts (same as drawFrame).
   if (lp > 0.5 && linePts && linePts.length > 0 && reveal > 0.3) {
     const lastPt = linePts[linePts.length - 1]
@@ -654,6 +710,7 @@ export function drawCandleFrame(
         opts.hoverX, opts.hoveredCandle.close, opts.hoverTime ?? 0,
         opts.formatValue, opts.formatTime,
         opts.scrubAmount,
+        opts.hoverMarker ?? undefined,
       )
     } else {
       drawCandleCrosshair(
@@ -661,6 +718,7 @@ export function drawCandleFrame(
         opts.hoverX, opts.hoveredCandle, opts.hoverTime ?? 0,
         opts.formatValue, opts.formatTime,
         opts.scrubAmount,
+        opts.hoverMarker ?? undefined,
       )
     }
   }

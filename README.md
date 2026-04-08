@@ -62,10 +62,24 @@ The component fills its parent container. Set a height on the parent. Pass `data
 |------|------|---------|-------------|
 | `momentum` | `boolean \| Momentum` | `true` | Dot glow + arrows. `true` = auto-detect, or `'up' \| 'down' \| 'flat'` |
 | `scrub` | `boolean` | `true` | Crosshair scrubbing on hover |
+| `markers` | `LivelineMarker[]` | — | Draw transaction/event markers on the plotted line and show their custom label in scrub when hovered |
 | `exaggerate` | `boolean` | `false` | Tight Y-axis — small moves fill chart height |
 | `showValue` | `boolean` | `false` | Large live value overlay (60fps DOM update, no re-renders) |
 | `valueMomentumColor` | `boolean` | `false` | Color the value text green/red by momentum |
 | `degen` | `boolean \| DegenOptions` | `false` | Burst particles + chart shake on momentum swings |
+
+`markers` are separate from `data`. Each marker is anchored to the rendered value at its `time`, so you only pass:
+
+```ts
+{
+  time: number
+  label: string
+  type?: 'positive' | 'negative'
+  seriesId?: string
+}
+```
+
+Use `seriesId` only in multi-series mode. When the scrubber is near a marker, its `label` replaces the primary scrub value while the time stays visible.
 
 **Candlestick**
 

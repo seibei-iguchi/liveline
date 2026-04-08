@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Liveline } from 'liveline'
-import type { LivelinePoint, CandlePoint } from 'liveline'
+import type { LivelinePoint, CandlePoint, LivelineMarker } from 'liveline'
 
 // --- Data generators ---
 
@@ -75,6 +75,20 @@ type Preset = 'dev' | 'crypto'
 
 const formatCrypto = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+function buildMarker(prev: LivelinePoint, pt: LivelinePoint, preset: Preset): LivelineMarker {
+  const delta = pt.value - prev.value
+  const positive = delta >= 0
+  const amount = preset === 'crypto'
+    ? formatCrypto(Math.abs(delta))
+    : Math.abs(delta).toFixed(2)
+
+  return {
+    time: pt.time,
+    label: `${positive ? 'Received' : 'Sent'}: ${amount}`,
+    type: positive ? 'positive' : 'negative',
+  }
+}
+
 // --- Demo ---
 
 function Demo() {
@@ -97,6 +111,7 @@ function Demo() {
   const [candleSecs, setCandleSecs] = useState(2)
   const [candles, setCandles] = useState<CandlePoint[]>([])
   const [liveCandle, setLiveCandle] = useState<CandlePoint | null>(null)
+  const [markers, setMarkers] = useState<LivelineMarker[]>([])
 
   const candleSecsRef = useRef(candleSecs)
   candleSecsRef.current = candleSecs
@@ -105,12 +120,51 @@ function Demo() {
   const liveCandleRef = useRef<CandlePoint | null>(null)
   const dataRef = useRef<LivelinePoint[]>([])
   const intervalRef = useRef<number>(0)
+  const markersRef = useRef<LivelineMarker[]>([])
+  const tickCounterRef = useRef(0)
   const volatilityRef = useRef(volatility)
   volatilityRef.current = volatility
   const startValueRef = useRef(startValue)
   startValueRef.current = startValue
   // Tick buffer covers widest window: crypto 1h=3600 ticks, dev 5m≈1000 ticks
   const maxTicksRef = useRef(1200)
+
+  const resetMarkers = () => {
+    markersRef.current = []
+    tickCounterRef.current = 0
+    setMarkers([])
+  }
+
+  const setMarkerState = (next: LivelineMarker[]) => {
+    markersRef.current = next
+    setMarkers(next)
+  }
+
+  const seedMarkers = (seed: LivelinePoint[]) => {
+    const desiredCount = preset === 'crypto' ? 8 : 6
+    const visiblePoints = Math.max(
+      desiredCount * 3,
+      Math.ceil((windowSecs * 1000) / tickRate) + desiredCount * 2,
+    )
+    const tail = seed.slice(-visiblePoints)
+    const step = Math.max(6, Math.floor(tail.length / desiredCount))
+    const next: LivelineMarker[] = []
+
+    for (let i = step; i < tail.length - 1; i += step) {
+      next.push(buildMarker(tail[i - 1], tail[i], preset))
+    }
+
+    setMarkerState(next.slice(-desiredCount))
+  }
+
+  const maybeAddMarker = (prev: LivelinePoint, pt: LivelinePoint) => {
+    tickCounterRef.current += 1
+    const markerEvery = preset === 'crypto' ? 45 : 18
+    if (tickCounterRef.current % markerEvery !== 0) return
+
+    const next = [...markersRef.current, buildMarker(prev, pt, preset)]
+    setMarkerState(next.slice(-(preset === 'crypto' ? 24 : 18)))
+  }
 
   const tickAndAggregate = (pt: LivelinePoint) => {
     const width = candleSecsRef.current
@@ -157,6 +211,7 @@ function Demo() {
     dataRef.current = seed
     setValue(v)
     lastValueRef.current = v
+    seedMarkers(seed)
 
     const agg = aggregateCandles(seed, candleSecsRef.current)
     setCandles(agg.candles)
@@ -165,9 +220,11 @@ function Demo() {
 
     intervalRef.current = window.setInterval(() => {
       const now = Date.now() / 1000
-      const pt = generatePoint(lastValueRef.current, now, volatilityRef.current, startValueRef.current)
+      const prevValue = lastValueRef.current
+      const pt = generatePoint(prevValue, now, volatilityRef.current, startValueRef.current)
       lastValueRef.current = pt.value
       setValue(pt.value)
+      maybeAddMarker({ time: now - tickRate / 1000, value: prevValue }, pt)
       setData(prev => {
         const next = [...prev, pt]
         const trimmed = next.length > maxTicksRef.current ? next.slice(-maxTicksRef.current) : next
@@ -183,6 +240,7 @@ function Demo() {
       setLoading(true)
       setData([]); dataRef.current = []
       setCandles([]); setLiveCandle(null); liveCandleRef.current = null
+      resetMarkers()
       clearInterval(intervalRef.current)
       const timer = setTimeout(() => setScenario('live'), 3000)
       return () => clearTimeout(timer)
@@ -192,6 +250,7 @@ function Demo() {
       setLoading(true)
       setData([]); dataRef.current = []
       setCandles([]); setLiveCandle(null); liveCandleRef.current = null
+      resetMarkers()
       clearInterval(intervalRef.current)
       return
     }
@@ -200,6 +259,7 @@ function Demo() {
       setLoading(false)
       setData([]); dataRef.current = []
       setCandles([]); setLiveCandle(null); liveCandleRef.current = null
+      resetMarkers()
       clearInterval(intervalRef.current)
       return
     }
@@ -213,9 +273,11 @@ function Demo() {
     clearInterval(intervalRef.current)
     intervalRef.current = window.setInterval(() => {
       const now = Date.now() / 1000
-      const pt = generatePoint(lastValueRef.current, now, volatilityRef.current, startValueRef.current)
+      const prevValue = lastValueRef.current
+      const pt = generatePoint(prevValue, now, volatilityRef.current, startValueRef.current)
       lastValueRef.current = pt.value
       setValue(pt.value)
+      maybeAddMarker({ time: now - tickRate / 1000, value: prevValue }, pt)
       setData(prev => {
         const next = [...prev, pt]
         const trimmed = next.length > maxTicksRef.current ? next.slice(-maxTicksRef.current) : next
@@ -261,6 +323,7 @@ function Demo() {
     // Force re-seed by cycling to loading
     setData([]); dataRef.current = []
     setCandles([]); setLiveCandle(null); liveCandleRef.current = null
+    resetMarkers()
     lastValueRef.current = preset === 'crypto' ? 65000 : 100
     clearInterval(intervalRef.current)
     setLoading(true)
@@ -378,6 +441,7 @@ function Demo() {
           windows={preset === 'crypto' ? CRYPTO_WINDOWS : undefined}
           formatValue={preset === 'crypto' ? formatCrypto : undefined}
           onModeChange={(mode) => setChartType(mode)}
+          markers={markers}
           grid={grid}
           scrub={scrub}
         />
@@ -420,6 +484,7 @@ function Demo() {
                 color={preset === 'crypto' ? '#f7931a' : undefined}
                 window={windowSecs}
                 formatValue={preset === 'crypto' ? formatCrypto : undefined}
+                markers={markers}
                 grid={grid && size.w >= 200}
                 scrub={scrub}
               />
@@ -447,6 +512,7 @@ function Demo() {
         <span>window: {windowSecs}s</span>
         <span>candle: {candleSecs}s</span>
         <span>tick: {tickRate}ms</span>
+        <span>markers: {markers.length}</span>
         <span>volatility: {volatility}</span>
         <span>mode: {chartType}</span>
       </div>

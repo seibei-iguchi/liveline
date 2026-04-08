@@ -1,12 +1,12 @@
 import { useRef, useEffect, useCallback } from 'react'
-import type { LivelinePoint, LivelinePalette, LivelineSeries, Momentum, ReferenceLine, HoverPoint, Padding, ChartLayout, OrderbookData, DegenOptions, BadgeVariant, CandlePoint } from './types'
+import type { LivelinePoint, LivelinePalette, LivelineSeries, LivelineMarker, Momentum, ReferenceLine, HoverPoint, Padding, ChartLayout, OrderbookData, DegenOptions, BadgeVariant, CandlePoint } from './types'
 import { lerp } from './math/lerp'
 import { computeRange } from './math/range'
 import { detectMomentum } from './math/momentum'
 import { interpolateAtTime } from './math/interpolate'
 import { getDpr, applyDpr } from './canvas/dpr'
 import { drawFrame, drawCandleFrame, drawMultiFrame, FADE_EDGE_WIDTH } from './draw'
-import type { MultiSeriesEntry } from './draw'
+import type { MultiSeriesEntry, ResolvedMarker, HoverMarkerLabel } from './draw'
 import { drawLoading } from './draw/loading'
 import { drawEmpty } from './draw/empty'
 import { createOrderbookState } from './draw/orderbook'
@@ -29,6 +29,7 @@ interface EngineConfig {
   formatValue: (v: number) => string
   formatTime: (t: number) => string
   padding: Required<Padding>
+  markers?: LivelineMarker[]
   onHover?: (point: HoverPoint | null) => void
   showPulse: boolean
   scrub: boolean
@@ -118,6 +119,95 @@ const CANDLE_BUFFER_NO_BADGE = 0.015
 interface WindowTransState {
   from: number; to: number; startMs: number
   rangeFromMin: number; rangeFromMax: number; rangeToMin: number; rangeToMax: number
+}
+
+const MARKER_HOVER_PX = 10
+
+function resolveMarkerColor(
+  marker: LivelineMarker,
+  palette: LivelinePalette,
+  fallback: string = palette.line,
+): string {
+  if (marker.type === 'positive') return palette.dotUp
+  if (marker.type === 'negative') return palette.dotDown
+  return fallback
+}
+
+function pickHoverMarker(
+  markers: ResolvedMarker[],
+  hoverX: number | null,
+): HoverMarkerLabel | null {
+  if (hoverX === null || markers.length === 0) return null
+
+  let nearest: ResolvedMarker | null = null
+  let nearestDist = Infinity
+  for (const marker of markers) {
+    const dist = Math.abs(marker.x - hoverX)
+    if (dist > MARKER_HOVER_PX || dist >= nearestDist) continue
+    nearest = marker
+    nearestDist = dist
+  }
+
+  return nearest ? { label: nearest.label, color: nearest.color } : null
+}
+
+function resolveLineMarkers(
+  markers: LivelineMarker[] | undefined,
+  layout: ChartLayout,
+  palette: LivelinePalette,
+  visible: LivelinePoint[],
+  maxTime: number,
+): ResolvedMarker[] {
+  if (!markers || markers.length === 0) return []
+
+  const result: ResolvedMarker[] = []
+  for (const marker of markers) {
+    if (marker.seriesId) continue
+    const x = layout.toX(marker.time)
+    if (x < layout.pad.left - 8 || x > layout.toX(maxTime) + 8) continue
+    const value = interpolateAtTime(visible, marker.time)
+    if (value === null) continue
+    result.push({
+      x,
+      y: layout.toY(value),
+      label: marker.label,
+      color: resolveMarkerColor(marker, palette),
+    })
+  }
+  return result
+}
+
+function resolveMultiMarkers(
+  markers: LivelineMarker[] | undefined,
+  layout: ChartLayout,
+  seriesEntries: MultiSeriesEntry[],
+  maxTime: number,
+): ResolvedMarker[] {
+  if (!markers || markers.length === 0 || seriesEntries.length === 0) return []
+
+  const fallbackEntry = seriesEntries.find(entry => (entry.alpha ?? 1) > 0.01) ?? seriesEntries[0]
+  const result: ResolvedMarker[] = []
+
+  for (const marker of markers) {
+    const entry = marker.seriesId
+      ? seriesEntries.find(candidate => candidate.id === marker.seriesId)
+      : fallbackEntry
+    if (!entry || (entry.alpha ?? 1) < 0.01) continue
+
+    const x = layout.toX(marker.time)
+    if (x < layout.pad.left - 8 || x > layout.toX(maxTime) + 8) continue
+    const value = interpolateAtTime(entry.visible, marker.time)
+    if (value === null) continue
+
+    result.push({
+      x,
+      y: layout.toY(value),
+      label: marker.label,
+      color: resolveMarkerColor(marker, entry.palette, entry.palette.line),
+    })
+  }
+
+  return result
 }
 
 /** Lerp display value with adaptive speed — slow for big jumps, fast for small ticks. */
@@ -1374,6 +1464,9 @@ export function useLivelineEngine(
         }
       }
 
+      const markers = resolveLineMarkers(cfg.markers, layout, cfg.palette, lineVisible, now)
+      const hoverMarker = pickHoverMarker(markers, drawHoverX)
+
       // --- Draw ---
       drawCandleFrame(ctx, layout, cfg.palette, {
         candles: drawCandles,
@@ -1394,6 +1487,8 @@ export function useLivelineEngine(
         now,
         pauseProgress,
         showGrid: cfg.showGrid,
+        markers,
+        hoverMarker,
         scrubAmount,
         hoverX: drawHoverX,
         hoverValue: drawHoverCandle?.close ?? null,
@@ -1577,7 +1672,7 @@ export function useLivelineEngine(
           if (range.max > globalMax) globalMax = range.max
         }
         // Always push to entries (drawMultiFrame skips via alpha)
-        seriesEntries.push({ visible, smoothValue: sv, palette: s.palette, label: s.label, alpha })
+        seriesEntries.push({ id: s.id, visible, smoothValue: sv, palette: s.palette, label: s.label, alpha })
       }
     }
 
@@ -1674,6 +1769,9 @@ export function useLivelineEngine(
       hoverEntries = lastHoverEntriesRef.current
     }
 
+    const markers = resolveMultiMarkers(cfg.markers, layout, seriesEntries, now)
+    const hoverMarker = pickHoverMarker(markers, drawHoverX)
+
     // Draw multi-series frame
     drawMultiFrame(ctx, layout, {
       series: seriesEntries,
@@ -1681,6 +1779,8 @@ export function useLivelineEngine(
       showGrid: cfg.showGrid,
       showPulse: cfg.showPulse,
       referenceLine: cfg.referenceLine,
+      markers,
+      hoverMarker,
       hoverX: drawHoverX,
       hoverTime: drawHoverTime,
       hoverEntries,
@@ -1820,6 +1920,8 @@ export function useLivelineEngine(
     scrubAmountRef.current = hoverResult.scrubAmount
     lastHoverRef.current = hoverResult.lastHover
     const { hoverX: drawHoverX, hoverValue: drawHoverValue, hoverTime: drawHoverTime } = hoverResult
+    const markers = resolveLineMarkers(cfg.markers, layout, cfg.palette, visible, now)
+    const hoverMarker = pickHoverMarker(markers, drawHoverX)
 
     // Compute swing magnitude for particles (recent velocity / visible range)
     const lookback = Math.min(5, visible.length - 1)
@@ -1840,6 +1942,8 @@ export function useLivelineEngine(
       showPulse: cfg.showPulse,
       showFill: cfg.showFill,
       referenceLine: cfg.referenceLine,
+      markers,
+      hoverMarker,
       hoverX: drawHoverX,
       hoverValue: drawHoverValue,
       hoverTime: drawHoverTime,

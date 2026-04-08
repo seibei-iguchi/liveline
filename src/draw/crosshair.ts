@@ -1,4 +1,5 @@
 import type { LivelinePalette, ChartLayout } from '../types'
+import type { HoverMarkerLabel } from './index'
 
 export interface MultiSeriesHoverEntry {
   color: string
@@ -19,6 +20,7 @@ export function drawCrosshair(
   tooltipY?: number,
   liveDotX?: number,
   tooltipOutline?: boolean,
+  hoverMarker?: HoverMarkerLabel,
 ) {
   if (scrubOpacity < 0.01) return
 
@@ -51,7 +53,7 @@ export function drawCrosshair(
   // Skip text for small containers (text is ~200px wide)
   if (scrubOpacity < 0.1 || layout.w < 300) return
 
-  const valueText = formatValue(hoverValue)
+  const valueText = hoverMarker?.label ?? formatValue(hoverValue)
   const timeText = formatTime(hoverTime)
   const separator = '  ·  '
 
@@ -87,7 +89,7 @@ export function drawCrosshair(
   }
 
   // Value (dark)
-  ctx.fillStyle = palette.tooltipText
+  ctx.fillStyle = hoverMarker?.color ?? palette.tooltipText
   ctx.fillText(valueText, tx, ty)
 
   // Separator + time (lighter)
@@ -111,6 +113,7 @@ export function drawMultiCrosshair(
   tooltipY?: number,
   tooltipOutline?: boolean,
   liveDotX?: number,
+  hoverMarker?: HoverMarkerLabel,
 ) {
   if (scrubOpacity < 0.01 || entries.length === 0) return
 
@@ -159,6 +162,10 @@ export function drawMultiCrosshair(
   const segments: Seg[] = [
     { text: timeText, color: palette.gridLabel },
   ]
+  if (hoverMarker) {
+    segments.push({ text: sep, color: palette.gridLabel })
+    segments.push({ text: hoverMarker.label, color: hoverMarker.color })
+  }
   for (const e of entries) {
     segments.push({ text: sep, color: palette.gridLabel })
     // Inline dot (drawn as circle, not text)
