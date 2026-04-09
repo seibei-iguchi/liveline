@@ -64,6 +64,8 @@ The component fills its parent container. Set a height on the parent. Pass `data
 | `momentum` | `boolean \| Momentum` | `true` | Dot glow + arrows. `true` = auto-detect, or `'up' \| 'down' \| 'flat'` |
 | `scrub` | `boolean` | `true` | Crosshair scrubbing on hover |
 | `markers` | `LivelineMarker[]` | — | Draw transaction/event markers on the plotted line and show their custom label in scrub when hovered |
+| `markerSize` | `number` | `4` | Radius of marker dots in pixels |
+| `markerOutlineSize` | `number` | — | Extra halo radius added on top of `markerSize` (defaults to `markerSize`, so total halo radius is `2x` marker radius) |
 | `exaggerate` | `boolean` | `false` | Tight Y-axis — small moves fill chart height |
 | `showValue` | `boolean` | `false` | Large live value overlay (60fps DOM update, no re-renders) |
 | `valueMomentumColor` | `boolean` | `false` | Color the value text green/red by momentum |

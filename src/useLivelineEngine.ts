@@ -30,6 +30,8 @@ interface EngineConfig {
   formatTime: (t: number) => string
   padding: Required<Padding>
   markers?: LivelineMarker[]
+  markerSize: number
+  markerOutlineSize?: number
   onHover?: (point: HoverPoint | null) => void
   showPulse: boolean
   scrub: boolean
@@ -128,7 +130,7 @@ function resolveMarkerColor(
   palette: LivelinePalette,
   fallback: string = palette.line,
 ): string {
-  if (marker.type === 'positive') return palette.dotUp
+  if (marker.type === 'positive') return fallback
   if (marker.type === 'negative') return palette.dotDown
   return fallback
 }
@@ -148,7 +150,7 @@ function pickHoverMarker(
     nearestDist = dist
   }
 
-  return nearest ? { label: nearest.label, color: nearest.color } : null
+  return nearest ? { label: nearest.label, color: nearest.color, x: nearest.x } : null
 }
 
 function resolveLineMarkers(
@@ -157,6 +159,7 @@ function resolveLineMarkers(
   palette: LivelinePalette,
   visible: LivelinePoint[],
   maxTime: number,
+  markerSize: number,
 ): ResolvedMarker[] {
   if (!markers || markers.length === 0) return []
 
@@ -170,8 +173,10 @@ function resolveLineMarkers(
     result.push({
       x,
       y: layout.toY(value),
+      size: markerSize,
       label: marker.label,
       color: resolveMarkerColor(marker, palette),
+      type: marker.type,
     })
   }
   return result
@@ -182,6 +187,7 @@ function resolveMultiMarkers(
   layout: ChartLayout,
   seriesEntries: MultiSeriesEntry[],
   maxTime: number,
+  markerSize: number,
 ): ResolvedMarker[] {
   if (!markers || markers.length === 0 || seriesEntries.length === 0) return []
 
@@ -202,8 +208,10 @@ function resolveMultiMarkers(
     result.push({
       x,
       y: layout.toY(value),
+      size: markerSize,
       label: marker.label,
       color: resolveMarkerColor(marker, entry.palette, entry.palette.line),
+      type: marker.type,
     })
   }
 
@@ -1464,8 +1472,10 @@ export function useLivelineEngine(
         }
       }
 
-      const markers = resolveLineMarkers(cfg.markers, layout, cfg.palette, lineVisible, now)
-      const hoverMarker = pickHoverMarker(markers, drawHoverX)
+      const resolvedMarkers = resolveLineMarkers(cfg.markers, layout, cfg.palette, lineVisible, now, cfg.markerSize)
+      const showMarkersInCandlePipeline = lineModeProg > 0.5
+      const markers = showMarkersInCandlePipeline ? resolvedMarkers : []
+      const hoverMarker = showMarkersInCandlePipeline ? pickHoverMarker(markers, drawHoverX) : null
 
       // --- Draw ---
       drawCandleFrame(ctx, layout, cfg.palette, {
@@ -1488,6 +1498,7 @@ export function useLivelineEngine(
         pauseProgress,
         showGrid: cfg.showGrid,
         markers,
+        markerOutlineSize: cfg.markerOutlineSize,
         hoverMarker,
         scrubAmount,
         hoverX: drawHoverX,
@@ -1769,7 +1780,7 @@ export function useLivelineEngine(
       hoverEntries = lastHoverEntriesRef.current
     }
 
-    const markers = resolveMultiMarkers(cfg.markers, layout, seriesEntries, now)
+    const markers = resolveMultiMarkers(cfg.markers, layout, seriesEntries, now, cfg.markerSize)
     const hoverMarker = pickHoverMarker(markers, drawHoverX)
 
     // Draw multi-series frame
@@ -1780,6 +1791,7 @@ export function useLivelineEngine(
       showPulse: cfg.showPulse,
       referenceLine: cfg.referenceLine,
       markers,
+      markerOutlineSize: cfg.markerOutlineSize,
       hoverMarker,
       hoverX: drawHoverX,
       hoverTime: drawHoverTime,
@@ -1920,7 +1932,7 @@ export function useLivelineEngine(
     scrubAmountRef.current = hoverResult.scrubAmount
     lastHoverRef.current = hoverResult.lastHover
     const { hoverX: drawHoverX, hoverValue: drawHoverValue, hoverTime: drawHoverTime } = hoverResult
-    const markers = resolveLineMarkers(cfg.markers, layout, cfg.palette, visible, now)
+    const markers = resolveLineMarkers(cfg.markers, layout, cfg.palette, visible, now, cfg.markerSize)
     const hoverMarker = pickHoverMarker(markers, drawHoverX)
 
     // Compute swing magnitude for particles (recent velocity / visible range)
@@ -1943,6 +1955,7 @@ export function useLivelineEngine(
       showFill: cfg.showFill,
       referenceLine: cfg.referenceLine,
       markers,
+      markerOutlineSize: cfg.markerOutlineSize,
       hoverMarker,
       hoverX: drawHoverX,
       hoverValue: drawHoverValue,
