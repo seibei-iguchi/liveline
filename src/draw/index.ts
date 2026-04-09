@@ -1,4 +1,5 @@
 import type { LivelinePalette, ChartLayout, LivelinePoint, Momentum, ReferenceLine, OrderbookData, DegenOptions, CandlePoint } from '../types'
+import { parseColorRgb } from '../theme'
 import { drawGrid, type GridState } from './grid'
 import { drawLine } from './line'
 import { drawDot, drawArrows, drawSimpleDot, drawMultiDot } from './dot'
@@ -16,6 +17,8 @@ const SHAKE_DECAY_RATE = 0.002
 const SHAKE_MIN_AMPLITUDE = 0.2
 export const FADE_EDGE_WIDTH = 40
 const CROSSHAIR_FADE_MIN_PX = 5
+const MARKER_HOVER_ANIM_PX = 12
+const MARKER_REVEAL_START = 0.98
 
 export interface ArrowState { up: number; down: number }
 
@@ -26,13 +29,16 @@ export interface ShakeState {
 export interface ResolvedMarker {
   x: number
   y: number
+  size: number
   label: string
   color: string
+  type?: 'positive' | 'negative'
 }
 
 export interface HoverMarkerLabel {
   label: string
   color: string
+  x: number
 }
 
 export function createShakeState(): ShakeState {
@@ -45,24 +51,74 @@ function drawMarkers(
   palette: LivelinePalette,
   markers: ResolvedMarker[] | undefined,
   alpha: number,
+  scrubX: number | null = null,
+  scrubAmount: number = 0,
+  hoverMarker: HoverMarkerLabel | null = null,
+  markerOutlineSize: number | undefined = undefined,
+  now_ms: number = 0,
 ): void {
-  if (!markers || markers.length === 0 || alpha <= 0.01) return
-
-  const outline = `rgb(${palette.bgRgb[0]}, ${palette.bgRgb[1]}, ${palette.bgRgb[2]})`
+  if (!markers || markers.length === 0 || alpha <= MARKER_REVEAL_START) return
+  const markerIntroT = Math.max(0, Math.min(1, (alpha - MARKER_REVEAL_START) / (1 - MARKER_REVEAL_START)))
+  const markerScaleIn = markerIntroT * markerIntroT * (3 - 2 * markerIntroT)
+  if (markerScaleIn <= 0.001) return
   ctx.save()
-  ctx.globalAlpha *= alpha
+  const baseAlpha = ctx.globalAlpha
+  const rightSideAlpha = baseAlpha * (1 - scrubAmount * 0.6)
 
+  const blendRgb = (a: [number, number, number], b: [number, number, number], t: number): string => {
+    const r = Math.round(a[0] + (b[0] - a[0]) * t)
+    const g = Math.round(a[1] + (b[1] - a[1]) * t)
+    const bl = Math.round(a[2] + (b[2] - a[2]) * t)
+    return `rgb(${r},${g},${bl})`
+  }
+
+  const bgRgb = parseColorRgb(palette.badgeOuterBg)
+
+  const drawOne = (marker: ResolvedMarker, animate: boolean) => {
+    const hoverDist = animate && scrubX !== null ? Math.abs(marker.x - scrubX) : MARKER_HOVER_ANIM_PX
+    const hoverT = animate
+      ? Math.max(0, Math.min(1, 1 - hoverDist / MARKER_HOVER_ANIM_PX))
+      : 0
+    const scale = 1 + 0.7 * hoverT * hoverT
+    const size = marker.size * markerScaleIn * scale
+    const outlineExtra = (markerOutlineSize ?? marker.size) * markerScaleIn
+    const outlineSize = size + outlineExtra
+    const markerAlpha = animate
+      ? baseAlpha
+      : (scrubX !== null && marker.x > scrubX ? rightSideAlpha : baseAlpha)
+    const haloColor = blendRgb(parseColorRgb(marker.color), bgRgb, 0.65)
+
+    ctx.beginPath()
+    ctx.arc(marker.x, marker.y, outlineSize, 0, Math.PI * 2)
+    ctx.globalAlpha = markerAlpha * 0.75
+    ctx.fillStyle = haloColor
+    ctx.fill()
+
+    ctx.beginPath()
+    ctx.arc(marker.x, marker.y, size, 0, Math.PI * 2)
+    ctx.globalAlpha = markerAlpha
+    ctx.fillStyle = marker.color
+    ctx.fill()
+  }
+
+  let hovered: ResolvedMarker | null = null
   for (const marker of markers) {
     if (marker.x < layout.pad.left - 6 || marker.x > layout.w - layout.pad.right + 6) continue
     if (marker.y < layout.pad.top - 6 || marker.y > layout.h - layout.pad.bottom + 6) continue
 
-    ctx.beginPath()
-    ctx.arc(marker.x, marker.y, 4, 0, Math.PI * 2)
-    ctx.fillStyle = marker.color
-    ctx.fill()
-    ctx.strokeStyle = outline
-    ctx.lineWidth = 2
-    ctx.stroke()
+    const isHovered = scrubX !== null
+      && hoverMarker !== null
+      && Math.abs(marker.x - hoverMarker.x) < 0.5
+
+    if (isHovered) {
+      hovered = marker
+      continue
+    }
+    drawOne(marker, false)
+  }
+
+  if (hovered) {
+    drawOne(hovered, true)
   }
 
   ctx.restore()
@@ -80,6 +136,7 @@ export interface DrawOptions {
   showFill: boolean
   referenceLine?: ReferenceLine
   markers?: ResolvedMarker[]
+  markerOutlineSize?: number
   hoverMarker?: HoverMarkerLabel | null
   hoverX: number | null
   hoverValue: number | null
@@ -183,7 +240,11 @@ export function drawFrame(
     }
   }
 
-  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+  drawMarkers(
+    ctx, layout, palette, opts.markers, reveal,
+    scrubX, opts.scrubAmount, opts.hoverMarker ?? null,
+    opts.markerOutlineSize, opts.now_ms,
+  )
 
   if (pts && pts.length > 0) {
     const lastPt = pts[pts.length - 1]
@@ -294,6 +355,7 @@ export interface MultiSeriesDrawOptions {
   showPulse: boolean
   referenceLine?: ReferenceLine
   markers?: ResolvedMarker[]
+  markerOutlineSize?: number
   hoverMarker?: HoverMarkerLabel | null
   hoverX: number | null
   hoverTime: number | null
@@ -388,7 +450,11 @@ export function drawMultiFrame(
     }
   }
 
-  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+  drawMarkers(
+    ctx, layout, palette, opts.markers, reveal,
+    scrubX, opts.scrubAmount, opts.hoverMarker ?? null,
+    opts.markerOutlineSize, opts.now_ms,
+  )
 
   // 5. Endpoint dots + labels for each series
   // Dots stay at reveal-based alpha only (no scrub dimming) — matching
@@ -485,6 +551,7 @@ export interface CandleDrawOptions {
   pauseProgress: number
   showGrid: boolean
   markers?: ResolvedMarker[]
+  markerOutlineSize?: number
   hoverMarker?: HoverMarkerLabel | null
   scrubAmount: number
   hoverX: number | null
@@ -655,7 +722,14 @@ export function drawCandleFrame(
     ctx.restore()
   }
 
-  drawMarkers(ctx, layout, palette, opts.markers, reveal)
+  drawMarkers(
+    ctx, layout, palette, opts.markers, reveal,
+    opts.scrubAmount > 0.05 ? opts.hoverX : null,
+    opts.scrubAmount,
+    opts.hoverMarker ?? null,
+    opts.markerOutlineSize,
+    opts.now_ms,
+  )
 
   // 5. Live dot — position from drawLine's returned pts (same as drawFrame).
   if (lp > 0.5 && linePts && linePts.length > 0 && reveal > 0.3) {

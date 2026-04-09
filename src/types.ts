@@ -129,6 +129,8 @@ export interface LivelineProps {
   lerpSpeed?: number
   padding?: Padding
   markers?: LivelineMarker[]
+  markerSize?: number
+  markerOutlineSize?: number
   typography?: LivelineTypography
   onHover?: (point: HoverPoint | null) => void
   cursor?: string          // CSS cursor on hover (default: 'crosshair')

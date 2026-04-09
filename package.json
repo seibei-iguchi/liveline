@@ -1,6 +1,6 @@
 {
   "name": "@seibei-iguchi/liveline",
-  "version": "0.0.9",
+  "version": "0.10.0",
   "type": "module",
   "description": "Real-time animated charts for React — line, candlestick, and multi-series modes",
   "keywords": [

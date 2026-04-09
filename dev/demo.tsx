@@ -49,12 +49,6 @@ const TIME_WINDOWS = [
   { label: '5m', secs: 300 },
 ]
 
-const CRYPTO_WINDOWS = [
-  { label: '5m', secs: 300 },
-  { label: '15m', secs: 900 },
-  { label: '1h', secs: 3600 },
-]
-
 const TICK_RATES: { label: string; ms: number }[] = [
   { label: '50ms', ms: 50 },
   { label: '100ms', ms: 100 },
@@ -71,21 +65,60 @@ const CANDLE_WIDTHS = [
   { label: '10s', secs: 10 },
 ]
 
-type Preset = 'dev' | 'crypto'
+const MARKER_SIZES = [3, 4, 5, 6, 8]
+const MARKER_OUTLINE_SIZES = [2, 3, 4, 5, 6, 8]
 
-const formatCrypto = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+type Preset = 'dev' | 'static'
 
 function buildMarker(prev: LivelinePoint, pt: LivelinePoint, preset: Preset): LivelineMarker {
   const delta = pt.value - prev.value
   const positive = delta >= 0
-  const amount = preset === 'crypto'
-    ? formatCrypto(Math.abs(delta))
-    : Math.abs(delta).toFixed(2)
+  const amount = Math.abs(delta).toFixed(2)
 
   return {
     time: pt.time,
     label: `${positive ? 'Received' : 'Sent'}: ${amount}`,
     type: positive ? 'positive' : 'negative',
+  }
+}
+
+function buildStaticFixture(baseValue = 100): {
+  data: LivelinePoint[]
+  value: number
+  markers: LivelineMarker[]
+} {
+  const now = Date.now() / 1000
+  const points: LivelinePoint[] = []
+  const markers: LivelineMarker[] = []
+  const windowSecs = 300
+  const stepSecs = 1
+  const count = windowSecs / stepSecs + 1
+  let value = baseValue
+
+  for (let i = 0; i < count; i++) {
+    const drift = Math.sin(i / 18) * 0.18 + Math.sin(i / 47) * 0.24
+    const noise = (Math.random() - 0.5) * 0.55
+    value += drift + noise
+    points.push({
+      time: now - windowSecs + i * stepSecs,
+      value,
+    })
+  }
+
+  const markerIndexes = [24, 61, 98, 142, 186, 229, 271]
+  for (const index of markerIndexes) {
+    const prev = points[Math.max(0, index - 1)]
+    const pt = points[index]
+    markers.push({
+      ...buildMarker(prev, pt, 'dev'),
+      time: pt.time,
+    })
+  }
+
+  return {
+    data: points,
+    value: points[points.length - 1].value,
+    markers,
   }
 }
 
@@ -103,6 +136,8 @@ function Demo() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [grid, setGrid] = useState(true)
   const [scrub, setScrub] = useState(true)
+  const [markerSize, setMarkerSize] = useState(4)
+  const [markerOutlineSize, setMarkerOutlineSize] = useState<number | null>(null)
 
   const [volatility, setVolatility] = useState<Volatility>('normal')
   const [tickRate, setTickRate] = useState(300)
@@ -126,8 +161,9 @@ function Demo() {
   volatilityRef.current = volatility
   const startValueRef = useRef(startValue)
   startValueRef.current = startValue
-  // Tick buffer covers widest window: crypto 1h=3600 ticks, dev 5m≈1000 ticks
+  // Tick buffer covers the widest live demo window comfortably.
   const maxTicksRef = useRef(1200)
+  const effectivePaused = preset === 'static' && scenario === 'live' ? true : paused
 
   const resetMarkers = () => {
     markersRef.current = []
@@ -141,7 +177,7 @@ function Demo() {
   }
 
   const seedMarkers = (seed: LivelinePoint[]) => {
-    const desiredCount = preset === 'crypto' ? 8 : 6
+    const desiredCount = preset === 'static' ? 8 : 6
     const visiblePoints = Math.max(
       desiredCount * 3,
       Math.ceil((windowSecs * 1000) / tickRate) + desiredCount * 2,
@@ -159,11 +195,11 @@ function Demo() {
 
   const maybeAddMarker = (prev: LivelinePoint, pt: LivelinePoint) => {
     tickCounterRef.current += 1
-    const markerEvery = preset === 'crypto' ? 45 : 18
+    const markerEvery = 18
     if (tickCounterRef.current % markerEvery !== 0) return
 
     const next = [...markersRef.current, buildMarker(prev, pt, preset)]
-    setMarkerState(next.slice(-(preset === 'crypto' ? 24 : 18)))
+    setMarkerState(next.slice(-18))
   }
 
   const tickAndAggregate = (pt: LivelinePoint) => {
@@ -196,10 +232,8 @@ function Demo() {
 
     const now = Date.now() / 1000
     const base = startValueRef.current
-    const isCrypto = base > 1000
-    const seedTickInterval = isCrypto ? 1 : 0.3
-    // Cover the widest time window with margin: crypto 1h=3600s, dev 5m=300s
-    const seedCount = isCrypto ? 3800 : 500
+    const seedTickInterval = 0.3
+    const seedCount = 500
     const seed: LivelinePoint[] = []
     let v = base
     for (let i = seedCount; i >= 0; i--) {
@@ -264,12 +298,28 @@ function Demo() {
       return
     }
 
+    if (preset === 'static') {
+      clearInterval(intervalRef.current)
+      setLoading(false)
+      const fixture = buildStaticFixture(startValueRef.current)
+      setData(fixture.data)
+      dataRef.current = fixture.data
+      setValue(fixture.value)
+      lastValueRef.current = fixture.value
+      setMarkerState(fixture.markers)
+      const agg = aggregateCandles(fixture.data, candleSecsRef.current)
+      setCandles(agg.candles)
+      setLiveCandle(agg.live)
+      liveCandleRef.current = agg.live ? { ...agg.live } : null
+      return
+    }
+
     startLive()
     return () => clearInterval(intervalRef.current)
-  }, [scenario, startLive])
+  }, [preset, scenario, startLive])
 
   useEffect(() => {
-    if (scenario !== 'live') return
+    if (scenario !== 'live' || preset === 'static') return
     clearInterval(intervalRef.current)
     intervalRef.current = window.setInterval(() => {
       const now = Date.now() / 1000
@@ -287,10 +337,10 @@ function Demo() {
       tickAndAggregate(pt)
     }, tickRate)
     return () => clearInterval(intervalRef.current)
-  }, [tickRate, scenario])
+  }, [preset, tickRate, scenario])
 
   useEffect(() => {
-    if (scenario !== 'live' || dataRef.current.length === 0) return
+    if (preset === 'static' || scenario !== 'live' || dataRef.current.length === 0) return
     const agg = aggregateCandles(dataRef.current, candleSecs)
     setCandles(agg.candles)
     setLiveCandle(agg.live)
@@ -299,16 +349,16 @@ function Demo() {
 
   // Preset switch — reset all dependent state
   useEffect(() => {
-    if (preset === 'crypto') {
-      setStartValue(65000)
-      startValueRef.current = 65000
-      setTickRate(1000)
-      setCandleSecs(60)
-      candleSecsRef.current = 60
+    if (preset === 'static') {
+      setStartValue(100)
+      startValueRef.current = 100
+      setTickRate(300)
+      setCandleSecs(5)
+      candleSecsRef.current = 5
       setWindowSecs(300)
       setVolatility('calm')
-      setChartType('candle')
-      maxTicksRef.current = 4000 // covers 1h window at 1 tick/sec
+      setChartType('line')
+      maxTicksRef.current = 1200
     } else {
       setStartValue(100)
       startValueRef.current = 100
@@ -324,10 +374,15 @@ function Demo() {
     setData([]); dataRef.current = []
     setCandles([]); setLiveCandle(null); liveCandleRef.current = null
     resetMarkers()
-    lastValueRef.current = preset === 'crypto' ? 65000 : 100
+    lastValueRef.current = 100
     clearInterval(intervalRef.current)
-    setLoading(true)
-    setScenario('loading')
+    if (preset === 'static') {
+      setLoading(false)
+      setScenario('live')
+    } else {
+      setLoading(true)
+      setScenario('loading')
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset])
 
@@ -358,7 +413,7 @@ function Demo() {
 
       <Section label="Preset">
         <Btn active={preset === 'dev'} onClick={() => setPreset('dev')}>Dev</Btn>
-        <Btn active={preset === 'crypto'} onClick={() => setPreset('crypto')}>Crypto</Btn>
+        <Btn active={preset === 'static'} onClick={() => setPreset('static')}>Static</Btn>
       </Section>
 
       <Section label="State">
@@ -383,19 +438,21 @@ function Demo() {
         </Label>
       </Section>
 
-      <Section label="Data">
-        <Label text="Volatility">
-          {VOLATILITIES.map(v => (
-            <Btn key={v} active={volatility === v} onClick={() => setVolatility(v)}>{v}</Btn>
-          ))}
-        </Label>
-        <Sep />
-        <Label text="Tick rate">
-          {TICK_RATES.map(t => (
-            <Btn key={t.ms} active={tickRate === t.ms} onClick={() => setTickRate(t.ms)}>{t.label}</Btn>
-          ))}
-        </Label>
-      </Section>
+      {preset !== 'static' && (
+        <Section label="Data">
+          <Label text="Volatility">
+            {VOLATILITIES.map(v => (
+              <Btn key={v} active={volatility === v} onClick={() => setVolatility(v)}>{v}</Btn>
+            ))}
+          </Label>
+          <Sep />
+          <Label text="Tick rate">
+            {TICK_RATES.map(t => (
+              <Btn key={t.ms} active={tickRate === t.ms} onClick={() => setTickRate(t.ms)}>{t.label}</Btn>
+            ))}
+          </Label>
+        </Section>
+      )}
 
       <Section label="Window">
         {TIME_WINDOWS.map(w => (
@@ -411,6 +468,23 @@ function Demo() {
         <Sep />
         <Toggle on={grid} onToggle={setGrid}>Grid</Toggle>
         <Toggle on={scrub} onToggle={setScrub}>Scrub</Toggle>
+        <Sep />
+        <Label text="Marker size">
+          {MARKER_SIZES.map(size => (
+            <Btn key={size} active={markerSize === size} onClick={() => setMarkerSize(size)}>
+              {size}
+            </Btn>
+          ))}
+        </Label>
+        <Sep />
+        <Label text="Outline">
+          <Btn active={markerOutlineSize === null} onClick={() => setMarkerOutlineSize(null)}>Auto</Btn>
+          {MARKER_OUTLINE_SIZES.map(size => (
+            <Btn key={size} active={markerOutlineSize === size} onClick={() => setMarkerOutlineSize(size)}>
+              {size}
+            </Btn>
+          ))}
+        </Label>
       </Section>
 
       {/* Main chart */}
@@ -434,14 +508,14 @@ function Demo() {
           lineData={data}
           lineValue={value}
           loading={loading}
-          paused={paused}
+          paused={effectivePaused}
           theme={theme}
-          color={preset === 'crypto' ? '#f7931a' : undefined}
+          color={preset === 'static' ? '#10b981' : undefined}
           window={windowSecs}
-          windows={preset === 'crypto' ? CRYPTO_WINDOWS : undefined}
-          formatValue={preset === 'crypto' ? formatCrypto : undefined}
           onModeChange={(mode) => setChartType(mode)}
           markers={markers}
+          markerSize={markerSize}
+          markerOutlineSize={markerOutlineSize ?? undefined}
           grid={grid}
           scrub={scrub}
         />
@@ -479,12 +553,13 @@ function Demo() {
                 lineData={data}
                 lineValue={value}
                 loading={loading}
-                paused={paused}
+                paused={effectivePaused}
                 theme={theme}
-                color={preset === 'crypto' ? '#f7931a' : undefined}
+                color={preset === 'static' ? '#10b981' : undefined}
                 window={windowSecs}
-                formatValue={preset === 'crypto' ? formatCrypto : undefined}
                 markers={markers}
+                markerSize={markerSize}
+                markerOutlineSize={markerOutlineSize ?? undefined}
                 grid={grid && size.w >= 200}
                 scrub={scrub}
               />
@@ -507,7 +582,7 @@ function Demo() {
         <span>ticks: {data.length}</span>
         <span>candles: {candles.length}</span>
         <span>loading: {String(loading)}</span>
-        <span>paused: {String(paused)}</span>
+        <span>paused: {String(effectivePaused)}</span>
         <span>value: {value.toFixed(2)}</span>
         <span>window: {windowSecs}s</span>
         <span>candle: {candleSecs}s</span>
